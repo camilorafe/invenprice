@@ -9,7 +9,10 @@ Flujo de `recomendar()`:
     3. Fallback: motor de reglas (Fase 5). El usuario nunca se queda sin recomendación.
     4. GUARDRAIL: si el precio sugerido (venga de donde venga) < mínimo viable, se recorta al
        mínimo, se marca `ajustado_guardrail=True` y se genera la nota para la UI.
-    5. Capa de auditoría: `detalle` con todos los números que sustentan la recomendación.
+    5. AUDITORÍA DE CIFRAS (`auditoria.py`): toda cifra que la justificación/riesgo presentan como
+       hecho se compara con los valores reales; si alguna no coincide, el texto se sustituye por la
+       plantilla del motor de reglas regenerada con los números finales.
+    6. Capa de auditoría: `detalle` con todos los números que sustentan la recomendación.
 
 El LLM NUNCA produce cifras que se usen directamente: el margen resultante se recalcula con el
 motor financiero y el precio pasa por el guardrail.
@@ -25,7 +28,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import currency, finance as f, rules
+from . import auditoria, currency, finance as f, rules
 
 RUTA_DATASET = Path(__file__).resolve().parent.parent / "data" / "pricing_reasoning_dataset.jsonl"
 CAMPOS_OUTPUT = ("precio_recomendado", "margen_resultante_pct", "justificacion", "riesgo")
@@ -285,6 +288,8 @@ def recomendar(
         "margen_resultante_pct": margen_res,
         "margen_unitario_resultante": mu_res,
         "unidades_objetivo": u_obj,
+        "cambio_pct": (precio - P) / P * 100 if P else None,
+        "markup_pct": f.markup_pct(P, C).valor_pct,
         "fuente": fuente,
         "modelo": modelo,
         "llm_intentado": llm_intentado,
@@ -292,6 +297,36 @@ def recomendar(
         "ajustado_guardrail": ajustado,
         "moneda": moneda,
     }
+
+    # 4. AUDITORÍA DE CIFRAS: toda cifra del texto debe coincidir con el cálculo determinista.
+    #    Si no, se descarta el texto y se usa la plantilla con los números reales (misma plantilla
+    #    del motor de reglas, regenerada con el precio FINAL tras el guardrail).
+    reglas_dicts = [asdict(r) for r in rec_reglas.reglas_activadas]
+    hechos = auditoria.hechos_desde_detalle(detalle, reglas_dicts)
+    justif_plantilla = rules.justificacion_plantilla(detalle, reglas_dicts)
+    riesgo_plantilla = rules.riesgo_plantilla(detalle, reglas_dicts)
+    if fuente == "motor_reglas":
+        # el texto del motor se regenera siempre con los números finales (p. ej. tras el guardrail)
+        justificacion, riesgo = justif_plantilla, riesgo_plantilla
+    disc_j = auditoria.verificar_cifras(justificacion, hechos)
+    disc_r = auditoria.verificar_cifras(riesgo, hechos)
+    justificacion_fuente = fuente
+    if disc_j:
+        justificacion, justificacion_fuente = justif_plantilla, "plantilla"
+        notas.append(
+            "La justificación del modelo citaba cifras que no coinciden con el cálculo determinista ("
+            + ", ".join(d.texto for d in disc_j[:5]) + "); se muestra una explicación generada por plantilla con los números reales."
+        )
+    riesgo_fuente = fuente
+    if disc_r:
+        riesgo, riesgo_fuente = riesgo_plantilla, "plantilla"
+        notas.append("El texto de riesgo del modelo citaba cifras incorrectas (" + ", ".join(d.texto for d in disc_r[:5]) + "); se muestra el riesgo por plantilla.")
+    detalle.update({
+        "justificacion_fuente": justificacion_fuente,
+        "riesgo_fuente": riesgo_fuente,
+        "cifras_discrepantes": [d.texto for d in disc_j + disc_r],
+        "justificacion_auditada": True,
+    })
     return RecomendacionFinal(
         precio_sugerido=precio,
         precio_original=precio_original,

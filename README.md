@@ -162,12 +162,34 @@ docs/                  benchmark.md, FINETUNING_LORA.md
 tests/                 suite pytest (una por fase)
 ```
 
-## Garantías
+## Garantías de auditabilidad
 
-- Ninguna cifra financiera la produce un LLM: el margen que se muestra siempre se recalcula con
-  `finance.py`, y el precio pasa por el guardrail.
-- Ninguna recomendación llega al usuario por debajo del precio mínimo viable; si se recorta, la
-  pantalla muestra: *"Recomendación original (X) ajustada al mínimo viable (Y) por restricción de
-  margen"*.
+Cada recomendación pasa por tres capas deterministas, en este orden, sin importar si la produjo el
+modelo local o el motor de reglas:
+
+1. **Validación de schema.** La salida del LLM debe ser JSON con exactamente los campos
+   `precio_recomendado`, `margen_resultante_pct`, `justificacion` y `riesgo`, con tipos válidos. Si
+   no, se descarta entera y responde el motor de reglas.
+2. **Guardrail de precio mínimo.** Si el precio (de cualquier fuente) queda por debajo del precio
+   mínimo viable calculado por `finance.py`, se recorta al mínimo y la pantalla muestra:
+   *"Recomendación original (X) ajustada al mínimo viable (Y) por restricción de margen"*.
+3. **Auditoría de cifras en el texto** (`invenprice/auditoria.py`). Toda cifra que la
+   justificación o el riesgo presentan como hecho (precios, márgenes, unidades, brechas con la
+   competencia, cambios porcentuales) se extrae del texto y se compara con los valores reales del
+   motor financiero para ese producto, con tolerancia de redondeo. Si alguna no coincide, **el texto
+   del modelo no se muestra**: se sustituye por una justificación generada por plantilla con los
+   números reales (la misma plantilla del motor de reglas) y se anota qué cifras fallaron. La
+   plantilla se regenera siempre con el precio *final* (tras el guardrail), así que tampoco puede
+   quedar un texto que hable de un precio que ya fue corregido.
+
+Esto es lo que ocurrió en el caso fuera del dataset del benchmark: el 3B escribió "margen 40,0 %"
+(real 41,2 %) y el 7B "200 unidades" (reales 280). Con la auditoría activa ambas justificaciones se
+habrían reemplazado por la plantilla, conservando el precio del modelo, que sí era razonable.
+
+Además:
+
+- El margen y las unidades que ve el usuario nunca vienen del LLM: se recalculan con `finance.py`.
 - Si el LLM no está, falla, tarda demasiado o responde mal formado, el usuario recibe la
   recomendación del motor de reglas con la explicación de por qué.
+- La pantalla de recomendación indica la fuente del precio (`llm_local` / `motor_reglas`) y la del
+  texto (`llm_local` / `plantilla`) por separado.

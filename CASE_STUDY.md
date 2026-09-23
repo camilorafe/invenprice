@@ -56,6 +56,12 @@ El margen que ve el usuario también se recalcula con el motor determinista; si 
 y la aritmética da 34,5 %, se muestra 34,5 % y una nota. Hay tests que fuerzan una recomendación
 por debajo del mínimo desde ambas fuentes y verifican la corrección.
 
+El mismo principio se extendió al **texto**: una capa de auditoría extrae toda cifra que la
+justificación presenta como hecho (precios, márgenes, unidades, brechas) y la compara con los
+valores reales. Si alguna no coincide, el texto del modelo se descarta y se muestra una
+justificación por plantilla con los números correctos. La necesidad quedó demostrada en el
+benchmark: ambos modelos acertaron el precio pero escribieron márgenes y unidades erróneos.
+
 ### 3. Casos borde como estados explícitos, no excepciones
 
 `costo = 0` da margen 100 % y markup *indefinido*; margen unitario ≤ 0 hace el punto de equilibrio

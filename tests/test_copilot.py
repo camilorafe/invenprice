@@ -187,3 +187,79 @@ def test_seleccion_few_shot_prefiere_casos_parecidos():
     ejemplos = copilot.seleccionar_ejemplos({"velocidad_venta": "muy_rapida", "precio_competencia": None, "restricciones": []}, n=5)
     assert len(ejemplos) == 5
     assert sum(1 for e in ejemplos if e["input"]["velocidad_venta"] == "muy_rapida") >= 3
+
+
+# ------------------------------------------------------------------ AUDITORÍA de cifras en la justificación
+def _salida(justificacion, riesgo="Si la rotación no mejora, el problema no era el precio.", precio=31000):
+    return json.dumps({"precio_recomendado": precio, "margen_resultante_pct": 34.5, "justificacion": justificacion, "riesgo": riesgo})
+
+
+def test_justificacion_con_margen_incorrecto_cae_a_plantilla():
+    # el LLM da el precio correcto (31.000) pero afirma un margen de 40 % (el real es 34,5 %)
+    texto = "Igualar a la competencia en 31.000 deja un margen resultante de 40.0% sobre costo 20.300."
+    r = recomendar(PROD, CTX, llm=llm_que_devuelve(_salida(texto)))
+    assert r.fuente == "llm_local" and r.precio_sugerido == 31000        # el precio del LLM se conserva
+    assert r.justificacion != texto                                     # el texto NO
+    assert r.detalle["justificacion_fuente"] == "plantilla"
+    assert "40.0%" in r.detalle["cifras_discrepantes"]
+    assert any("plantilla" in n for n in r.notas)
+    # la plantilla cita los números reales
+    assert "31.000" in r.justificacion and "34.5%" in r.justificacion and "20.300" in r.justificacion
+
+
+def test_justificacion_con_unidades_incorrectas_cae_a_plantilla():
+    texto = "Con 31.000 el objetivo de 5.000.000 requiere 200 unidades/mes."   # reales: 468
+    r = recomendar(PROD, CTX, llm=llm_que_devuelve(_salida(texto)))
+    assert r.detalle["justificacion_fuente"] == "plantilla"
+    assert "200" in r.detalle["cifras_discrepantes"]
+    assert "468" in r.justificacion
+
+
+def test_justificacion_con_precio_inventado_cae_a_plantilla():
+    texto = "Bajar a 30.500 mantiene el margen en 34,5% frente al mínimo viable de 29.000."   # 30.500 no es ningún hecho
+    r = recomendar(PROD, CTX, llm=llm_que_devuelve(_salida(texto)))
+    assert r.detalle["justificacion_fuente"] == "plantilla" and "30.500" in r.detalle["cifras_discrepantes"]
+
+
+def test_justificacion_correcta_se_conserva():
+    texto = ("El producto se vende lento a 35.000 mientras la competencia está en 31.000 (12.9% por encima). Con costo 20.300 el "
+             "margen actual es 42.0% y el piso de 30% fija un mínimo viable de 29.000. Igualar en 31.000 deja 34.5% (10.700 por "
+             "unidad). El objetivo de 5.000.000 exige 468 unidades/mes frente a ~40; revisar a 30 días.")
+    r = recomendar(PROD, CTX, llm=llm_que_devuelve(_salida(texto)))
+    assert r.justificacion == texto
+    assert r.detalle["justificacion_fuente"] == "llm_local" and r.detalle["cifras_discrepantes"] == []
+
+
+def test_riesgo_con_cifra_incorrecta_cae_a_plantilla():
+    r = recomendar(PROD, CTX, llm=llm_que_devuelve(_salida("Igualar en 31.000.", riesgo="Si no rota, bajar hasta 27.000 en 30 días.")))
+    assert r.detalle["justificacion_fuente"] == "llm_local"
+    assert r.detalle["riesgo_fuente"] == "plantilla" and "27.000" in r.detalle["cifras_discrepantes"]
+
+
+def test_plantilla_tras_guardrail_cita_el_precio_final(monkeypatch):
+    # el motor de reglas devuelve 26.000 (bajo el mínimo 28.000); la justificación final debe hablar de 28.000
+    prod = {"precio_venta": 30000, "costo": 19600, "margen_minimo_pct": 30}
+    original = rules.evaluar_reglas
+
+    def reglas_rotas(producto, contexto=None):
+        rec = original(producto, contexto)
+        rec.precio_sugerido = 26000
+        return rec
+
+    monkeypatch.setattr(copilot.rules, "evaluar_reglas", reglas_rotas)
+    r = recomendar(prod, {"velocidad_venta": "lenta"}, llm=None, usar_llm=False)
+    assert r.precio_sugerido == 28000 and r.ajustado_guardrail
+    assert "28.000" in r.justificacion and "26.000" not in r.justificacion.replace(r.nota_guardrail or "", "")
+    assert r.detalle["cifras_discrepantes"] == []
+
+
+def test_llm_bajo_minimo_con_texto_del_precio_original_cae_a_plantilla():
+    # el LLM recomienda 26.000 y lo cita en el texto; el guardrail lo sube a 28.000 -> el texto queda inconsistente
+    prod = {"precio_venta": 30000, "costo": 19600, "margen_minimo_pct": 30}
+    salida = json.dumps({"precio_recomendado": 26000, "margen_resultante_pct": 24.6,
+                         "justificacion": "Bajar a 26.000 para rotar, con margen 24.6%.", "riesgo": "Margen bajo."})
+    r = recomendar(prod, {"velocidad_venta": "lenta"}, llm=llm_que_devuelve(salida))
+    assert r.precio_sugerido == 28000 and r.ajustado_guardrail
+    # 26.000 es el precio original (hecho real) pero 24.6 % no es el margen final (30 %): se descarta el texto
+    assert r.detalle["justificacion_fuente"] == "plantilla" and "24.6%" in r.detalle["cifras_discrepantes"]
+    assert "28.000" in r.justificacion and "30.0%" in r.justificacion

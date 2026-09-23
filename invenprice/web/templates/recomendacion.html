@@ -27,10 +27,12 @@
   {% endif %}
 </div>
 
-<h2>Justificación</h2>
-<div class="tarjeta"><p>{{ rec.justificacion }}</p></div>
+<h2>Justificación <span class="ayuda">texto: {% if rec.detalle.justificacion_fuente == 'plantilla' %}plantilla con cifras reales (el texto del modelo citaba cifras incorrectas){% elif rec.detalle.justificacion_fuente == 'llm_local' %}modelo local, cifras auditadas ✔{% else %}motor de reglas{% endif %}</span></h2>
+<div class="tarjeta"><p>{{ rec.justificacion }}</p>
+  {% if rec.detalle.cifras_discrepantes %}<p class="aviso warn">Cifras del modelo descartadas por no coincidir con el cálculo: {{ rec.detalle.cifras_discrepantes|join(', ') }}</p>{% endif %}
+</div>
 
-<h2>Principal riesgo</h2>
+<h2>Principal riesgo <span class="ayuda">texto: {{ 'plantilla' if rec.detalle.riesgo_fuente == 'plantilla' else rec.detalle.riesgo_fuente }}</span></h2>
 <div class="tarjeta"><p>{{ rec.riesgo }}</p></div>
 
 <h2>Números que sustentan la recomendación (auditoría)</h2>

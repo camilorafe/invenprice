@@ -368,6 +368,33 @@ def _cerrar(P, C, gv, P_min, m_min, m_act, mu_act, objetivo, Pc, vel, G, u_est, 
 
 
 # ------------------------------------------------------------------ plantillas de texto
+def justificacion_plantilla(detalle: dict, reglas: Optional[list] = None) -> str:
+    """Justificación generada por plantilla a partir de los números reales (sin LLM).
+
+    `reglas` acepta ReglaActivada o dicts con nombre/condicion/efecto. Es la misma plantilla que
+    usa el motor de reglas; el copiloto la usa como fallback cuando el texto del LLM cita cifras
+    que no coinciden con el cálculo determinista.
+    """
+    lista = []
+    for r in reglas or []:
+        if isinstance(r, dict):
+            r = ReglaActivada(r["nombre"], r["condicion"], r["efecto"], float(r.get("ajuste_pct", 0.0)))
+        lista.append(r)
+    return _justificacion(detalle, lista)
+
+
+def clasificar_velocidad(unidades_mes: float) -> str:
+    """Traduce unidades vendidas en 30 días a la categoría de velocidad del motor."""
+    u = UNIDADES_POR_VELOCIDAD
+    if unidades_mes <= u["lenta"]:
+        return "lenta"
+    if unidades_mes <= u["media"]:
+        return "media"
+    if unidades_mes <= u["rapida"]:
+        return "rapida"
+    return "muy_rapida"
+
+
 def _justificacion(d: dict, reglas: list[ReglaActivada]) -> str:
     P, C = d["precio_actual"], d["costo"]
     partes = [
@@ -417,6 +444,17 @@ _RIESGOS = {
     "restriccion_escasez": "Subir por escasez puede percibirse como abuso y perder clientes de forma permanente; limitar el aumento al periodo sin stock.",
     "restriccion_margen_minimo": "El piso impuesto por el dueño puede ser incompatible con el mercado; si el producto no rota, la decisión es relajar el piso o retirar la línea.",
 }
+
+
+def riesgo_plantilla(detalle: dict, reglas: Optional[list] = None) -> str:
+    """Riesgo generado por plantilla; la regla dominante es la de mayor ajuste absoluto."""
+    dominante = "velocidad"
+    if reglas:
+        def ajuste(r):
+            return abs(r["ajuste_pct"] if isinstance(r, dict) else r.ajuste_pct)
+        top = max(reglas, key=ajuste)
+        dominante = top["nombre"] if isinstance(top, dict) else top.nombre
+    return _riesgo(dominante, detalle)
 
 
 def _riesgo(dominante: str, d: dict) -> str:
