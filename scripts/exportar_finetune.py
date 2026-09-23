@@ -25,7 +25,7 @@ SYSTEM = (
 
 def main() -> None:
     casos = copilot.cargar_dataset()
-    with SALIDA.open("w", encoding="utf-8") as fh:
+    with SALIDA.open("w", encoding="utf-8", newline="\n") as fh:
         for c in casos:
             i = c["input"]
             pmin = f.precio_minimo_viable(i["costo"], i["margen_minimo_pct"]).precio

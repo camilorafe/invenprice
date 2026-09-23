@@ -546,7 +546,7 @@ def construir(i: int, c: dict) -> dict:
 def main() -> None:
     casos = [construir(i + 1, c) for i, c in enumerate(CASOS)]
     SALIDA.parent.mkdir(parents=True, exist_ok=True)
-    with SALIDA.open("w", encoding="utf-8") as fh:
+    with SALIDA.open("w", encoding="utf-8", newline="\n") as fh:  # LF siempre: el CI regenera en Linux y compara
         for c in casos:
             fh.write(json.dumps(c, ensure_ascii=False) + "\n")
     print(f"{len(casos)} casos escritos en {SALIDA}")

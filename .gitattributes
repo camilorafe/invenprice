@@ -1,0 +1,4 @@
+# Archivos generados y comparados en CI: siempre LF, en cualquier sistema operativo
+*.jsonl text eol=lf
+*.yml   text eol=lf
+*.sh    text eol=lf
