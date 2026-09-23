@@ -77,20 +77,50 @@ Medido con `python scripts/benchmark_llm.py` sobre 4 casos del dataset (prompt f
 ~1.700-2.000 tokens de entrada, salida JSON de ~250-320 tokens). Detalle en
 [`docs/benchmark.md`](docs/benchmark.md).
 
-| Hardware | Intel Core i5-8350U (4 núcleos / 8 hilos, 1,7 GHz) · 16 GB RAM · **sin GPU dedicada** · Windows 11 |
-|---|---|
-| Modelo | `qwen2.5:7b-instruct-q4_K_M` (Ollama 0.34, CPU) |
-| Carga inicial del modelo | ~30 s (una vez; luego queda en memoria) |
-| Latencia por recomendación | **210-286 s (promedio 238 s)** |
-| Velocidad de generación | 2,9-3,8 tokens/s |
-| Salidas JSON válidas | 4/4 |
-| Precio coincidente con el dataset | 4/4 (los casos evaluados forman parte del dataset few-shot, así que esto mide adherencia al formato y a las reglas, no generalización) |
+Hardware: **Intel Core i5-8350U** (4 núcleos / 8 hilos, 1,7 GHz) · 16 GB RAM · **sin GPU dedicada** ·
+Windows 11 · Ollama 0.34 en CPU, cuantización Q4_K_M.
 
-**Requisitos mínimos observados:** 8 GB de RAM libres para el modelo 7B (≈5 GB residentes) y un
-CPU de 4 núcleos dan ~4 minutos por recomendación, utilizable solo como consulta puntual. Con GPU
-(≥ 6 GB VRAM) la misma consulta baja a segundos. En equipos más limitados usar el modelo 3B o
-desactivar el LLM: el motor de reglas responde en milisegundos y cubre todos los casos del dataset
+| | `qwen2.5:7b-instruct-q4_K_M` (4,7 GB) | `qwen2.5:3b-instruct-q4_K_M` (1,9 GB) |
+|---|---|---|
+| Carga inicial del modelo | ~30 s (una vez; luego queda en memoria) | no medido por separado |
+| Latencia por recomendación | **210-286 s (promedio 238 s)** | **87-111 s (promedio 98 s)** |
+| Velocidad de generación | 2,9-3,8 tokens/s | 7,5-7,7 tokens/s |
+| Salidas JSON válidas | 4/4 | 4/4 |
+| Precio igual al del dataset | 4/4 | 4/4 |
+
+Los 4 casos evaluados pertenecen al dataset y probablemente aparecen entre los ejemplos few-shot
+del prompt, así que la coincidencia de precio mide adherencia al formato y a las reglas, **no
+generalización**. Detalle por caso: [`docs/benchmark.md`](docs/benchmark.md) y
+[`docs/benchmark_3b.md`](docs/benchmark_3b.md).
+
+**Caso fuera del dataset** (generalización): precio 27.000, costo 15.000, mínimo 30 %, venta media,
+competencia 24.500, restricción "temporada baja", objetivo 3.000.000.
+
+| Fuente | Precio | Margen (recalculado) | Tiempo | Salida válida |
+|---|---|---|---|---|
+| Motor de reglas | 24.500 | 38,8 % | < 1 ms | — |
+| Qwen2.5-3B | 25.500 | 41,2 % | 102 s | sí |
+| Qwen2.5-7B | 25.750 | 41,7 % | 248 s | sí |
+
+Los dos modelos quedaron a menos del 5 % del motor de reglas y por encima del mínimo viable (21.429).
+Ambos cometieron pequeños errores aritméticos en el texto de la justificación (el 3B escribió
+"margen 40,0 %" donde la cifra real es 41,2 %; el 7B calculó 200 unidades donde son 280): por eso
+el margen y las unidades que se muestran en la interfaz siempre se recalculan con el motor
+determinista y el texto del modelo se presenta como razonamiento, no como fuente de cifras.
+
+**Requisitos mínimos observados:** el modelo 7B necesita ~5 GB de RAM libres y en un CPU de 4
+núcleos tarda ~4 minutos por recomendación (consulta puntual, no uso continuo). El 3B necesita ~2,5 GB
+y tarda ~1,5 minutos. Con GPU (≥ 6 GB VRAM) ambos bajan a segundos. En equipos más limitados,
+desactivar el LLM: el motor de reglas responde en milisegundos y reproduce los 48 casos del dataset
 con un desvío medio del 0,25 % respecto a la recomendación experta.
+
+## Datos de demostración
+
+```bash
+python scripts/demo_seed.py            # 7 productos, 60 días de ventas, alertas de ejemplo
+python -m invenprice.web.app
+python scripts/smoke_web.py            # prueba end-to-end del servidor real (añade --llm para probar el modelo local)
+```
 
 ## Arquitectura
 
