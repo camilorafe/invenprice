@@ -1,0 +1,5 @@
+# Producción (el negocio solo necesita esto; todo lo demás es opcional)
+flask>=3.0
+
+# Desarrollo / tests
+pytest>=8.0
