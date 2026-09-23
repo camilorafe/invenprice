@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block titulo %}Alertas{% endblock %}
+{% block contenido %}
+<h1>Alertas de inventario</h1>
+<p class="ayuda">Detección estadística sobre los movimientos de los últimos 120 días: mermas inusuales (por tamaño, frecuencia o usuario), ajustes fuera de horario y discrepancias recurrentes entre stock esperado y contado. No usa inteligencia artificial: cada alerta muestra los números que la sustentan.</p>
+<div class="tarjeta">
+  {% if alertas %}
+  <table>
+    <tr><th>Severidad</th><th>Tipo</th><th>Producto</th><th>Usuario</th><th>Fecha</th><th>Detalle</th></tr>
+    {% for a in alertas %}
+    <tr>
+      <td><span class="etiqueta-sev sev-{{ a.severidad }}">{{ a.severidad }}</span></td>
+      <td><code>{{ a.tipo }}</code></td>
+      <td>{% if a.producto_id %}<a href="{{ url_for('producto_detalle', pid=a.producto_id) }}">{{ a.producto_nombre }}</a>{% else %}—{% endif %}</td>
+      <td>{{ a.usuario or '—' }}</td>
+      <td>{{ (a.fecha or '')[:16] }}</td>
+      <td>{{ a.descripcion }}<details><summary>evidencia</summary><div class="mono">{{ a.evidencia|tojson(indent=1) }}</div></details></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p>✔ No se detectaron patrones sospechosos en los movimientos recientes.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block titulo %}Recomendación · {{ p.nombre }}{% endblock %}
+{% block contenido %}
+<h1>Recomendación de precio · <a href="{{ url_for('producto_detalle', pid=p.id) }}">{{ p.nombre }}</a></h1>
+
+<div class="tarjeta">
+  <div class="fila">
+    <div>
+      <div class="ayuda">Precio sugerido</div>
+      <div class="grande">{{ rec.precio_sugerido|dinero(p.moneda) }}</div>
+      <div class="ayuda">{{ sugerido_monedas.USD|dinero('USD') }} · {{ sugerido_monedas.COP|dinero('COP') }} · {{ sugerido_monedas.CNY|dinero('CNY') }}</div>
+      <p>Precio actual: {{ p.precio_venta|dinero(p.moneda) }}
+        {% if rec.detalle.cambio_pct is not none %}({{ '%+.1f'|format(((rec.precio_sugerido - p.precio_venta) / p.precio_venta * 100) if p.precio_venta else 0) }}%){% endif %}
+        · Margen resultante: <strong>{{ rec.margen_resultante_pct|pct }}</strong> ({{ rec.detalle.margen_unitario_resultante|dinero(p.moneda) }}/u)</p>
+    </div>
+    <div>
+      <div class="ayuda">Fuente</div>
+      <p><span class="fuente">{% if rec.fuente == 'llm_local' %}Modelo local ({{ rec.detalle.modelo }}){% else %}Motor de reglas{% endif %}</span> <span class="ayuda">{{ rec.fuente }}</span></p>
+      {% for n in rec.notas %}{% if n != rec.nota_guardrail %}<p class="ayuda">{{ n }}</p>{% endif %}{% endfor %}
+    </div>
+  </div>
+
+  {% if rec.ajustado_guardrail %}
+  <div class="aviso warn"><strong>⚠ Ajustada por el guardrail de precio mínimo.</strong> {{ rec.nota_guardrail }}</div>
+  {% else %}
+  <p class="ayuda">✔ La recomendación respeta el precio mínimo viable de {{ rec.precio_minimo_viable|dinero(p.moneda) }}.</p>
+  {% endif %}
+</div>
+
+<h2>Justificación</h2>
+<div class="tarjeta"><p>{{ rec.justificacion }}</p></div>
+
+<h2>Principal riesgo</h2>
+<div class="tarjeta"><p>{{ rec.riesgo }}</p></div>
+
+<h2>Números que sustentan la recomendación (auditoría)</h2>
+<div class="tarjeta">
+  <table>
+    <tr><td>Precio actual</td><td class="num">{{ rec.detalle.precio_actual|dinero(p.moneda) }}</td><td>Costo unitario</td><td class="num">{{ rec.detalle.costo|dinero(p.moneda) }}</td></tr>
+    <tr><td>Gastos variables/u</td><td class="num">{{ rec.detalle.gastos_variables|dinero(p.moneda) }}</td><td>Margen actual</td><td class="num">{{ rec.detalle.margen_actual_pct|pct }}</td></tr>
+    <tr><td>Margen mínimo aplicado</td><td class="num">{{ rec.detalle.margen_minimo_pct|pct }}</td><td><strong>Precio mínimo viable</strong></td><td class="num"><strong>{{ rec.precio_minimo_viable|dinero(p.moneda) }}</strong></td></tr>
+    <tr><td>Precio de la competencia</td><td class="num">{{ rec.detalle.precio_competencia|dinero(p.moneda) if rec.detalle.precio_competencia else 'sin dato' }}</td><td>Velocidad de venta</td><td class="num">{{ rec.detalle.velocidad_venta }} (~{{ rec.detalle.unidades_mes_estimadas }} u/mes)</td></tr>
+    <tr><td>Objetivo mensual (este producto)</td><td class="num">{{ rec.detalle.objetivo_ingreso_mensual|dinero(p.moneda) if rec.detalle.objetivo_ingreso_mensual else 'sin objetivo' }}</td><td>Unidades necesarias al precio sugerido</td><td class="num">{{ rec.detalle.unidades_objetivo|num if rec.detalle.unidades_objetivo is not none else '—' }}</td></tr>
+    <tr><td>Recomendación original</td><td class="num">{{ rec.precio_original|dinero(p.moneda) }}</td><td>Ajustada por guardrail</td><td class="num">{{ 'sí' if rec.ajustado_guardrail else 'no' }}</td></tr>
+    <tr><td>LLM intentado</td><td class="num">{{ 'sí' if rec.detalle.llm_intentado else 'no' }}</td><td>Motivo de fallback</td><td>{{ rec.detalle.motivo_fallback or '—' }}</td></tr>
+  </table>
+  {% if ctx.restricciones %}<p class="ayuda">Restricciones consideradas: {{ ctx.restricciones|join('; ') }}</p>{% endif %}
+</div>
+
+<h2>Reglas evaluadas por el motor determinista</h2>
+<div class="tarjeta">
+  <p class="ayuda">{% if rec.fuente == 'llm_local' %}El motor de reglas se evaluó igualmente como referencia y para calcular el piso.{% else %}Estas reglas produjeron la recomendación.{% endif %}</p>
+  <table><tr><th>Regla</th><th>Condición</th><th>Efecto</th><th class="num">Ajuste</th></tr>
+  {% for r in rec.reglas_activadas %}<tr><td><code>{{ r.nombre }}</code></td><td>{{ r.condicion }}</td><td>{{ r.efecto }}</td><td class="num">{{ '%+.1f'|format(r.ajuste_pct) }}%</td></tr>{% endfor %}
+  </table>
+  <p class="ayuda">Precio del motor de reglas: {{ rec.detalle.precio_sugerido|dinero(p.moneda) if rec.fuente == 'motor_reglas' else '' }} <a href="{{ url_for('reglas_view') }}">Ver catálogo completo de reglas</a></p>
+</div>
+<p><a class="boton" href="{{ url_for('producto_detalle', pid=p.id) }}">Volver al producto</a></p>
+{% endblock %}

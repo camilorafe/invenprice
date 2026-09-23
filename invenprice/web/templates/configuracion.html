@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block titulo %}Configuración{% endblock %}
+{% block contenido %}
+<h1>Configuración</h1>
+
+<form method="post" action="{{ url_for('configuracion') }}">
+<div class="tarjeta">
+  <h3>Negocio</h3>
+  <div class="fila">
+    <div class="campo"><label>Moneda base del negocio (para totales)</label>
+      <select name="moneda_base">{% for m in monedas %}<option value="{{ m }}" {% if m == cfg('moneda_base','COP') %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></div>
+    <div class="campo"><label>Margen mínimo global % (si el producto no define uno)</label><input name="margen_minimo_global_pct" type="number" step="any" value="{{ cfg('margen_minimo_global_pct','20') }}"></div>
+    <div class="campo"><label>Objetivo de margen para este mes ({{ cfg('moneda_base','COP') }})</label><input name="objetivo_mes" type="number" step="any" value="{{ objetivo.monto if objetivo else '' }}" placeholder="ej. 2000000"></div>
+  </div>
+  <p class="ayuda">El objetivo es la ganancia (margen) mensual que quiere el negocio; se reparte por igual entre los productos activos para estimar unidades necesarias.</p>
+</div>
+
+<div class="tarjeta">
+  <h3>Costos fijos mensuales (arriendo, nómina, servicios)</h3>
+  {% if costos_fijos %}
+  <table><tr><th>Concepto</th><th class="num">Mensual</th><th></th></tr>
+  {% for c in costos_fijos %}<tr><td>{{ c.nombre }}</td><td class="num">{{ c.monto_mensual|dinero(c.moneda) }}</td>
+    <td><button formaction="{{ url_for('costo_fijo_eliminar', cid=c.id) }}" formmethod="post" class="peligro" type="submit">Eliminar</button></td></tr>{% endfor %}
+  <tr><th>Total</th><th class="num">{{ total_fijos|dinero(cfg('moneda_base','COP')) }}</th><th></th></tr></table>
+  {% endif %}
+  <div class="fila" style="margin-top:10px">
+    <div class="campo"><label>Nuevo concepto</label><input name="costo_fijo_nombre" placeholder="Arriendo"></div>
+    <div class="campo"><label>Monto mensual</label><input name="costo_fijo_monto" type="number" step="any" min="0"></div>
+  </div>
+</div>
+
+<div class="tarjeta">
+  <h3>Copiloto (modelo local de IA, opcional)</h3>
+  <p>Estado del modelo local: {% if llm_disponible %}<strong style="color:var(--ok)">disponible</strong>{% else %}<strong style="color:var(--err)">no disponible</strong> — se usará el motor de reglas (el sistema funciona igual).{% endif %}</p>
+  <div class="fila">
+    <div class="campo"><label>Usar modelo local cuando esté disponible</label>
+      <select name="copiloto_llm_activo"><option value="1" {% if cfg('copiloto_llm_activo','1') == '1' %}selected{% endif %}>Sí</option><option value="0" {% if cfg('copiloto_llm_activo','1') == '0' %}selected{% endif %}>No, solo motor de reglas</option></select></div>
+    <div class="campo"><label>Modelo (Ollama)</label><input name="modelo_local" value="{{ cfg('modelo_local','') }}"></div>
+    <div class="campo"><label>URL de Ollama</label><input name="ollama_url" value="{{ cfg('ollama_url','') }}"></div>
+    <div class="campo"><label>Tiempo máximo de espera (seg)</label><input name="timeout_llm_seg" type="number" step="1" value="{{ cfg('timeout_llm_seg','180') }}"></div>
+  </div>
+  <p class="ayuda">Instalación: <code>ollama pull {{ cfg('modelo_local','qwen2.5:7b-instruct-q4_K_M') }}</code>. En equipos sin GPU una recomendación puede tardar 3-5 minutos; el modelo <code>qwen2.5:3b-instruct-q4_K_M</code> es más rápido.</p>
+</div>
+
+<div class="tarjeta">
+  <h3>Horario del negocio (para detectar ajustes fuera de horario)</h3>
+  <div class="fila">
+    <div class="campo"><label>Hora de apertura (0-23)</label><input name="hora_apertura" type="number" min="0" max="23" value="{{ cfg('hora_apertura','7') }}"></div>
+    <div class="campo"><label>Hora de cierre (0-23)</label><input name="hora_cierre" type="number" min="0" max="23" value="{{ cfg('hora_cierre','20') }}"></div>
+    <div class="campo"><label>Zona horaria (horas respecto a UTC, Colombia = -5)</label><input name="zona_horaria_offset" type="number" step="0.5" value="{{ cfg('zona_horaria_offset','-5') }}"></div>
+  </div>
+</div>
+<button type="submit">Guardar configuración</button>
+</form>
+{% endblock %}

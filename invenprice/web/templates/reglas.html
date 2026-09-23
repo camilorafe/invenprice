@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block titulo %}Reglas del copiloto{% endblock %}
+{% block contenido %}
+<h1>Reglas del motor de pricing</h1>
+<p class="ayuda">El motor de reglas es el respaldo permanente del copiloto: funciona sin internet y sin modelo de IA. Cada regla es una condición explícita; en cada recomendación se muestran las que se activaron y su efecto.</p>
+<div class="tarjeta">
+  <table><tr><th>Regla</th><th>Condición</th><th>Efecto sobre el precio</th></tr>
+  {% for r in reglas %}<tr><td><code>{{ r.nombre }}</code></td><td>{{ r.condicion }}</td><td>{{ r.efecto }}</td></tr>{% endfor %}
+  </table>
+</div>
+<h2>Velocidad de venta → unidades/mes estimadas</h2>
+<div class="tarjeta">
+  <table><tr><th>Velocidad</th><th class="num">Unidades/mes (umbral)</th></tr>
+  {% for k, v in unidades.items() %}<tr><td>{{ k }}</td><td class="num">{{ v }}</td></tr>{% endfor %}</table>
+  <p class="ayuda">La velocidad de cada producto se detecta con las ventas de los últimos 30 días y puede cambiarse a mano al pedir la recomendación.</p>
+</div>
+{% endblock %}

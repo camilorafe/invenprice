@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block titulo %}Inicio{% endblock %}
+{% block contenido %}
+<h1>Resumen del negocio</h1>
+
+<div class="fila">
+  <div class="kpi"><div class="etiqueta">Productos activos</div><div class="valor">{{ productos|length }}</div></div>
+  <div class="kpi"><div class="etiqueta">Valor del inventario (a costo)</div><div class="valor">{{ valor_stock|dinero(moneda_base) }}</div></div>
+  <div class="kpi"><div class="etiqueta">Margen generado (últimos 30 días)</div><div class="valor">{{ contribucion_mes|dinero(moneda_base) }}</div></div>
+  <div class="kpi"><div class="etiqueta">Objetivo del mes</div>
+    <div class="valor">{% if objetivo %}{{ objetivo.monto|dinero(objetivo.moneda) }}{% else %}<span class="ayuda">sin definir</span>{% endif %}</div>
+    {% if objetivo and objetivo.monto > 0 %}<div class="ayuda">avance: {{ (contribucion_mes / objetivo.monto * 100)|pct }}</div>{% endif %}
+  </div>
+  <div class="kpi"><div class="etiqueta">Alertas de inventario</div><div class="valor">{{ n_alertas }}</div><a href="{{ url_for('alertas') }}">ver alertas</a></div>
+</div>
+
+<h2>Punto de equilibrio del negocio</h2>
+<div class="tarjeta">
+  {% if pe.estado == Estado.OK %}
+    {% if pe.unidades == 0 %}
+      <p>No hay costos fijos registrados: cualquier venta con margen positivo ya deja ganancia. Agrega arriendo, nómina y servicios en <a href="{{ url_for('configuracion') }}">Configuración</a> para calcular el punto de equilibrio.</p>
+    {% else %}
+      <p>Para cubrir <strong>{{ pe.costos_fijos|dinero(moneda_base) }}</strong> de costos fijos mensuales hay que vender
+      <strong>{{ pe.unidades|num }} unidades</strong> al mes (≈ {{ pe.ingreso|dinero(moneda_base) }} en ventas), con el mix de ventas de los últimos 30 días
+      y un margen promedio de {{ pe.margen_unitario|dinero(moneda_base) }} por unidad.</p>
+    {% endif %}
+  {% elif pe.estado == Estado.NO_ALCANZABLE %}
+    <p class="aviso error">Con los precios y costos actuales el margen promedio por unidad es cero o negativo: <strong>el punto de equilibrio no es alcanzable</strong> vendiendo más. Hay que subir precios o bajar costos.</p>
+  {% else %}
+    <p class="ayuda">Estado: {{ pe.estado.value }}</p>
+  {% endif %}
+</div>
+
+<h2>Rentabilidad por producto (últimos 30 días)</h2>
+<div class="tarjeta">
+  {% if ranking %}
+  <table>
+    <tr><th>Producto</th><th class="num">Margen/unidad</th><th class="num">Margen %</th><th class="num">Unidades</th><th class="num">Margen total</th><th class="num">Participación</th><th>Clasificación</th></tr>
+    {% for r in ranking %}
+    <tr>
+      <td><a href="{{ url_for('producto_detalle', pid=r.id) }}">{{ r.nombre }}</a></td>
+      <td class="num">{{ r.margen_unitario|dinero(moneda_base) }}</td>
+      <td class="num">{{ r.margen_pct|pct }}</td>
+      <td class="num">{{ r.unidades_vendidas|num }}</td>
+      <td class="num">{{ r.contribucion_total|dinero(moneda_base) }}</td>
+      <td class="num">{{ r.participacion_pct|pct }}</td>
+      <td>{% set c = r.clasificacion %}
+        {% if c == 'estrella' %}⭐ Estrella (margen y rotación altos)
+        {% elif c == 'margen_alto_rotacion_baja' %}Margen alto, rota poco
+        {% elif c == 'margen_bajo_rotacion_alta' %}Rota mucho, margen bajo
+        {% elif c == 'no_conviene' %}<span style="color:var(--err)">⚠ No conviene (pierde dinero)</span>
+        {% elif c == 'sin_ventas' %}Sin ventas
+        {% else %}Normal{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="ayuda">Los valores se muestran en {{ moneda_base }} (moneda base del negocio). Cada producto se calcula en su propia moneda y se convierte solo para mostrar.</p>
+  {% else %}
+  <p>Aún no hay productos. <a href="{{ url_for('productos') }}">Crea el primero</a>.</p>
+  {% endif %}
+</div>
+
+{% if alertas %}
+<h2>Últimas alertas</h2>
+<div class="tarjeta">
+  {% for a in alertas %}<p><span class="etiqueta-sev sev-{{ a.severidad }}">{{ a.severidad }}</span> {{ a.descripcion }}</p>{% endfor %}
+</div>
+{% endif %}
+
+{% if recs %}
+<h2>Últimas recomendaciones del copiloto</h2>
+<div class="tarjeta">
+  <table>
+    <tr><th>Fecha</th><th>Producto</th><th class="num">Precio sugerido</th><th>Fuente</th><th>Guardrail</th></tr>
+    {% for r in recs %}
+    <tr><td>{{ r.fecha[:16] }}</td><td><a href="{{ url_for('producto_detalle', pid=r.producto_id) }}">#{{ r.producto_id }}</a></td>
+        <td class="num">{{ r.precio_sugerido|num }}</td><td><span class="fuente">{{ r.fuente }}</span></td>
+        <td>{% if r.ajustado_guardrail %}⚠ ajustada (original {{ r.precio_original|num }}){% else %}—{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

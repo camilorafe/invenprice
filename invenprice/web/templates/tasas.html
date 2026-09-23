@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block titulo %}Tasas de cambio{% endblock %}
+{% block contenido %}
+<h1>Tasas de cambio</h1>
+<p class="ayuda">Las tasas se expresan como unidades de cada moneda por 1 USD. Cada producto se calcula en su propia moneda; las tasas solo se usan para mostrar los precios en las otras dos.</p>
+
+<div class="tarjeta">
+  <h3>Modo A · tabla manual (siempre disponible, sin internet)</h3>
+  <form class="linea" method="post" action="{{ url_for('tasas') }}">
+    <div class="campo"><label>1 USD = ? COP</label><input name="COP" type="number" step="any" min="0" value="{{ tasas.COP.tasa_por_usd }}"></div>
+    <div class="campo"><label>1 USD = ? CNY</label><input name="CNY" type="number" step="any" min="0" value="{{ tasas.CNY.tasa_por_usd }}"></div>
+    <div class="campo"><button type="submit">Guardar tasas</button></div>
+  </form>
+  <table style="margin-top:14px"><tr><th>Moneda</th><th class="num">Por 1 USD</th><th>Fuente</th><th>Actualizada</th></tr>
+  {% for m, t in tasas.items() %}<tr><td>{{ m }}</td><td class="num">{{ t.tasa_por_usd|num }}</td><td>{{ t.fuente }}</td><td>{{ t.actualizado_en[:16] }}</td></tr>{% endfor %}</table>
+</div>
+
+<div class="tarjeta">
+  <h3>Modo B · actualización desde internet (opcional)</h3>
+  <p>Estado: <strong>{% if modo_b %}activado{% else %}desactivado{% endif %}</strong>. Fuente: <code>{{ api_url }}</code> (API pública gratuita).
+     Si no hay internet o la API falla, se mantiene la última tasa guardada y el sistema sigue funcionando.</p>
+  <div class="fila">
+    <form method="post" action="{{ url_for('tasas_modo') }}">
+      <input type="hidden" name="modo_tasas_online" value="{{ '0' if modo_b else '1' }}">
+      <button type="submit" class="secundario">{% if modo_b %}Desactivar Modo B{% else %}Activar Modo B{% endif %}</button>
+    </form>
+    <form method="post" action="{{ url_for('tasas_actualizar') }}">
+      <button type="submit" {% if not modo_b %}disabled title="Activa el Modo B primero"{% endif %}>Actualizar ahora desde internet</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block titulo %}{{ p.nombre }}{% endblock %}
+{% block contenido %}
+<h1>{{ p.nombre }} <span class="ayuda">{{ p.sku or '' }} · {{ p.categoria or 'sin categoría' }} · moneda base {{ p.moneda }}</span></h1>
+
+<div class="fila">
+  <div class="kpi"><div class="etiqueta">Precio de venta</div><div class="valor">{{ p.precio_venta|dinero(p.moneda) }}</div>
+    <div class="ayuda">{{ a.precios.USD|dinero('USD') }} · {{ a.precios.COP|dinero('COP') }} · {{ a.precios.CNY|dinero('CNY') }}</div></div>
+  <div class="kpi"><div class="etiqueta">Costo unitario</div><div class="valor">{{ p.costo|dinero(p.moneda) }}</div>
+    <div class="ayuda">{{ a.costos.USD|dinero('USD') }} · {{ a.costos.COP|dinero('COP') }} · {{ a.costos.CNY|dinero('CNY') }}</div></div>
+  <div class="kpi"><div class="etiqueta">Stock actual</div><div class="valor">{{ p.stock_actual }}</div><div class="ayuda">vendidas últimos 30 días: {{ ctx.unidades_30d }} → venta {{ ctx.velocidad_venta }}</div></div>
+</div>
+
+<h2>Rentabilidad</h2>
+<div class="tarjeta">
+  <table>
+    <tr><th>Indicador</th><th class="num">Valor</th><th>Qué significa</th></tr>
+    <tr><td>Margen bruto</td><td class="num" {% if a.margen_bruto_pct is not none and a.margen_bruto_pct < 0 %}style="color:var(--err)"{% endif %}>{{ a.margen_bruto_pct|pct }} ({{ a.margen_bruto_unitario|dinero(p.moneda) }}/u)</td>
+        <td>Parte de cada peso <strong>vendido</strong> que es ganancia: (precio − costo) ÷ <strong>precio</strong>.{% if a.margen_bruto_pct is not none and a.margen_bruto_pct < 0 %} <strong>Se vende por debajo del costo.</strong>{% endif %}</td></tr>
+    <tr><td>Markup</td><td class="num">{% if a.markup_estado.value == 'indefinido' %}indefinido (costo 0){% else %}{{ a.markup_pct|pct }}{% endif %}</td>
+        <td>Cuánto se le suma al <strong>costo</strong>: (precio − costo) ÷ <strong>costo</strong>. No es lo mismo que el margen: 50% de markup = 33,3% de margen.</td></tr>
+    <tr><td>Margen neto</td><td class="num">{{ a.margen_neto_pct|pct }} ({{ a.margen_neto_unitario|dinero(p.moneda) }}/u)</td>
+        <td>Tras gastos variables ({{ p.gastos_variables|dinero(p.moneda) }}/u). Los costos fijos asignados a este producto ({{ a.costos_fijos_asignados|dinero(p.moneda) }}/mes) se ven en el punto de equilibrio.</td></tr>
+    <tr><td>Margen mínimo (regla)</td><td class="num">{{ a.margen_minimo_pct|pct }}</td><td>{% if p.margen_minimo_pct is not none %}Definido para este producto.{% else %}Se usa el mínimo global de Configuración.{% endif %}</td></tr>
+    <tr><td><strong>Precio mínimo viable</strong></td>
+        <td class="num"><strong>{% if a.precio_minimo_estado.value == 'ok' %}{{ a.precio_minimo_viable|dinero(p.moneda) }}{% else %}{{ a.precio_minimo_estado.value }}{% endif %}</strong>
+            {% if a.precio_minimo_estado.value == 'ok' %}<div class="ayuda">{{ a.minimos.USD|dinero('USD') }} · {{ a.minimos.COP|dinero('COP') }} · {{ a.minimos.CNY|dinero('CNY') }}</div>{% endif %}</td>
+        <td>Precio más bajo que cumple el margen mínimo. Ninguna recomendación del copiloto puede quedar por debajo.
+            {% if a.bajo_minimo %}<div class="aviso error" style="margin:8px 0 0">El precio actual está <strong>por debajo</strong> del mínimo viable.</div>{% endif %}</td></tr>
+    <tr><td>Punto de equilibrio</td>
+        <td class="num">{% if a.punto_equilibrio.estado == Estado.OK %}{{ a.punto_equilibrio.unidades|num }} u/mes{% elif a.punto_equilibrio.estado == Estado.NO_ALCANZABLE %}<span style="color:var(--err)">no alcanzable</span>{% else %}{{ a.punto_equilibrio.estado.value }}{% endif %}</td>
+        <td>Unidades para cubrir los costos fijos asignados ({{ a.costos_fijos_asignados|dinero(p.moneda) }}/mes).{% if a.punto_equilibrio.estado == Estado.NO_ALCANZABLE %} Con margen unitario ≤ 0 vender más no cubre nada.{% endif %}</td></tr>
+    <tr><td>Unidades para el objetivo del mes</td>
+        <td class="num">{% if a.unidades_objetivo is none %}<span class="ayuda">sin objetivo</span>{% elif a.unidades_objetivo.estado == Estado.OK %}{{ a.unidades_objetivo.unidades|num }} u{% elif a.unidades_objetivo.estado == Estado.NO_ALCANZABLE %}<span style="color:var(--err)">no alcanzable</span>{% else %}{{ a.unidades_objetivo.estado.value }}{% endif %}</td>
+        <td>{% if ctx.objetivo_total %}Parte proporcional del objetivo de {{ ctx.objetivo_total.monto|dinero(ctx.objetivo_total.moneda) }} ({{ ctx.objetivo_ingreso_mensual|dinero(p.moneda) }} de margen para este producto) ÷ margen por unidad.{% else %}Define el objetivo mensual en Configuración.{% endif %}</td></tr>
+  </table>
+</div>
+
+<h2>Copiloto de precio</h2>
+<div class="tarjeta">
+  <form class="linea" method="post" action="{{ url_for('producto_recomendar', pid=p.id) }}">
+    <div class="campo"><label>Velocidad de venta</label>
+      <select name="velocidad_venta">{% for v in velocidades %}<option value="{{ v }}" {% if v == ctx.velocidad_venta %}selected{% endif %}>{{ v }}{% if v == ctx.velocidad_venta %} (detectada){% endif %}</option>{% endfor %}</select></div>
+    <div class="campo" style="flex:2 1 320px"><label>Restricciones del dueño (separadas por ;)</label><input name="restricciones" placeholder="ej. temporada alta; no subir este trimestre; liquidar"></div>
+    <div class="campo"><button type="submit">Pedir recomendación</button></div>
+  </form>
+  <p class="ayuda">Si el modelo local está instalado puede tardar varios minutos en un equipo sin GPU; si no está disponible se usa el motor de reglas al instante.</p>
+  {% if recs %}
+  <h3>Historial</h3>
+  <table><tr><th>Fecha</th><th class="num">Precio sugerido</th><th>Fuente</th><th>Guardrail</th></tr>
+  {% for r in recs %}<tr><td>{{ r.fecha[:16] }}</td><td class="num">{{ r.precio_sugerido|dinero(p.moneda) }}</td><td><span class="fuente">{{ r.fuente }}</span></td>
+  <td>{% if r.ajustado_guardrail %}⚠ original {{ r.precio_original|dinero(p.moneda) }} ajustada al mínimo{% else %}—{% endif %}</td></tr>{% endfor %}</table>
+  {% endif %}
+</div>
+
+<div class="fila">
+  <div class="tarjeta">
+    <h3>Registrar venta</h3>
+    <form class="linea" method="post" action="{{ url_for('producto_venta', pid=p.id) }}">
+      <div class="campo"><label>Cantidad</label><input name="cantidad" type="number" min="1" step="1" required></div>
+      <div class="campo"><label>Precio unitario (vacío = actual)</label><input name="precio_unitario" type="number" step="any" min="0"></div>
+      <div class="campo"><label>Usuario</label><input name="usuario"></div>
+      <div class="campo"><button type="submit">Registrar venta</button></div>
+    </form>
+  </div>
+  <div class="tarjeta">
+    <h3>Movimiento de inventario</h3>
+    <form class="linea" method="post" action="{{ url_for('producto_movimiento', pid=p.id) }}">
+      <div class="campo"><label>Tipo</label><select name="tipo"><option value="entrada">Entrada (compra)</option><option value="salida">Salida</option><option value="merma">Merma (pérdida/rotura)</option><option value="ajuste">Ajuste por conteo (cantidad = stock contado)</option></select></div>
+      <div class="campo"><label>Cantidad</label><input name="cantidad" type="number" min="0" step="1" required></div>
+      <div class="campo"><label>Usuario</label><input name="usuario"></div>
+      <div class="campo"><label>Motivo</label><input name="motivo"></div>
+      <div class="campo"><button type="submit">Registrar</button></div>
+    </form>
+  </div>
+</div>
+
+<h2>Editar producto</h2>
+<div class="tarjeta">
+  <form class="linea" method="post" action="{{ url_for('producto_editar', pid=p.id) }}">
+    <div class="campo"><label>Nombre</label><input name="nombre" value="{{ p.nombre }}" required></div>
+    <div class="campo"><label>SKU</label><input name="sku" value="{{ p.sku or '' }}"></div>
+    <div class="campo"><label>Categoría</label><input name="categoria" value="{{ p.categoria or '' }}"></div>
+    <div class="campo"><label>Moneda</label><select name="moneda">{% for m in monedas %}<option value="{{ m }}" {% if m == p.moneda %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></div>
+    <div class="campo"><label>Costo</label><input name="costo" type="number" step="any" min="0" value="{{ p.costo }}"></div>
+    <div class="campo"><label>Precio de venta</label><input name="precio_venta" type="number" step="any" min="0" value="{{ p.precio_venta }}"></div>
+    <div class="campo"><label>Gastos variables/u</label><input name="gastos_variables" type="number" step="any" min="0" value="{{ p.gastos_variables }}"></div>
+    <div class="campo"><label>Margen mínimo %</label><input name="margen_minimo_pct" type="number" step="any" value="{{ p.margen_minimo_pct if p.margen_minimo_pct is not none else '' }}"></div>
+    <div class="campo"><label>Precio competencia</label><input name="precio_competencia" type="number" step="any" min="0" value="{{ p.precio_competencia if p.precio_competencia is not none else '' }}"></div>
+    <div class="campo"><button type="submit" class="secundario">Guardar cambios</button></div>
+  </form>
+  <p class="ayuda">El stock no se edita aquí: usa un movimiento (entrada, salida, merma o ajuste por conteo) para que quede auditado.</p>
+</div>
+
+<h2>Últimos movimientos</h2>
+<div class="tarjeta">
+  {% if movs %}
+  <table><tr><th>Fecha (UTC)</th><th>Tipo</th><th class="num">Cambio</th><th class="num">Stock resultante</th><th>Usuario</th><th>Motivo</th></tr>
+  {% for m in movs %}<tr><td>{{ m.fecha[:16] }}</td><td>{{ m.tipo }}</td><td class="num">{{ '%+d'|format(m.delta) }}</td><td class="num">{{ m.stock_resultante }}</td><td>{{ m.usuario or '—' }}</td>
+  <td>{{ m.motivo or '' }}{% if m.tipo == 'ajuste' %} (esperado {{ m.stock_esperado }}, contado {{ m.stock_contado }}){% endif %}</td></tr>{% endfor %}</table>
+  {% else %}<p class="ayuda">Sin movimientos.</p>{% endif %}
+</div>
+{% endblock %}

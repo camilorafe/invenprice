@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titulo %}InvenPrice{% endblock %} · InvenPrice</title>
+<style>
+  :root { --azul:#1d4ed8; --gris:#6b7280; --fondo:#f7f7f8; --borde:#e5e7eb; --ok:#166534; --err:#991b1b; --warn:#92400e; }
+  * { box-sizing:border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin:0; background:var(--fondo); color:#111827; font-size:16px; line-height:1.45; }
+  header { background:#111827; color:#fff; padding:12px 24px; display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+  header a { color:#fff; text-decoration:none; padding:6px 10px; border-radius:6px; }
+  header a:hover, header a.activo { background:#374151; }
+  header .marca { font-weight:700; font-size:20px; margin-right:12px; }
+  main { max-width:1100px; margin:24px auto; padding:0 20px; }
+  h1 { font-size:26px; margin:0 0 16px; } h2 { font-size:20px; margin:28px 0 10px; } h3 { font-size:17px; margin:18px 0 8px; }
+  .tarjeta { background:#fff; border:1px solid var(--borde); border-radius:10px; padding:18px 20px; margin-bottom:18px; }
+  .fila { display:flex; gap:18px; flex-wrap:wrap; } .fila > * { flex:1 1 260px; }
+  .kpi { background:#fff; border:1px solid var(--borde); border-radius:10px; padding:14px 18px; }
+  .kpi .etiqueta { color:var(--gris); font-size:14px; } .kpi .valor { font-size:24px; font-weight:700; }
+  table { width:100%; border-collapse:collapse; background:#fff; }
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--borde); vertical-align:top; }
+  th { background:#f3f4f6; font-weight:600; font-size:14px; }
+  td.num, th.num { text-align:right; font-variant-numeric: tabular-nums; }
+  form.linea { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  label { display:block; font-size:14px; color:#374151; margin-bottom:3px; }
+  input, select, textarea { font:inherit; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; min-width:120px; width:100%; }
+  textarea { min-height:70px; }
+  .campo { flex:1 1 160px; }
+  button, .boton { font:inherit; background:var(--azul); color:#fff; border:0; border-radius:6px; padding:9px 16px; cursor:pointer; text-decoration:none; display:inline-block; }
+  button.secundario { background:#e5e7eb; color:#111827; } button.peligro { background:#b91c1c; }
+  .aviso { padding:12px 14px; border-radius:8px; margin-bottom:14px; border:1px solid; }
+  .aviso.ok { background:#ecfdf5; color:var(--ok); border-color:#a7f3d0; }
+  .aviso.error { background:#fef2f2; color:var(--err); border-color:#fecaca; }
+  .aviso.warn { background:#fffbeb; color:var(--warn); border-color:#fde68a; }
+  .etiqueta-sev { display:inline-block; padding:2px 8px; border-radius:999px; font-size:13px; font-weight:600; }
+  .sev-alta { background:#fee2e2; color:#991b1b; } .sev-media { background:#fef3c7; color:#92400e; } .sev-baja { background:#e0f2fe; color:#075985; }
+  .fuente { display:inline-block; padding:3px 10px; border-radius:6px; font-size:14px; font-weight:600; background:#eef2ff; color:#3730a3; }
+  .ayuda { color:var(--gris); font-size:14px; }
+  .grande { font-size:32px; font-weight:800; }
+  details summary { cursor:pointer; color:var(--azul); }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size:13px; white-space:pre-wrap; background:#f3f4f6; padding:10px; border-radius:6px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="marca">InvenPrice</span>
+  <a href="{{ url_for('dashboard') }}">Inicio</a>
+  <a href="{{ url_for('productos') }}">Productos</a>
+  <a href="{{ url_for('alertas') }}">Alertas</a>
+  <a href="{{ url_for('tasas') }}">Tasas de cambio</a>
+  <a href="{{ url_for('reglas_view') }}">Reglas del copiloto</a>
+  <a href="{{ url_for('configuracion') }}">Configuración</a>
+</header>
+<main>
+  {% with mensajes = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in mensajes %}<div class="aviso {{ cat }}">{{ m }}</div>{% endfor %}
+  {% endwith %}
+  {% block contenido %}{% endblock %}
+</main>
+</body>
+</html>

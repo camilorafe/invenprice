@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block titulo %}Productos{% endblock %}
+{% block contenido %}
+<h1>Productos</h1>
+
+<div class="tarjeta">
+  <h3>Nuevo producto</h3>
+  <form class="linea" method="post" action="{{ url_for('producto_nuevo') }}">
+    <div class="campo"><label>Nombre *</label><input name="nombre" required></div>
+    <div class="campo"><label>SKU</label><input name="sku"></div>
+    <div class="campo"><label>Categoría</label><input name="categoria"></div>
+    <div class="campo"><label>Moneda</label><select name="moneda">{% for m in monedas %}<option value="{{ m }}" {% if m == 'COP' %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></div>
+    <div class="campo"><label>Costo unitario *</label><input name="costo" type="number" step="any" min="0" required></div>
+    <div class="campo"><label>Precio de venta *</label><input name="precio_venta" type="number" step="any" min="0" required></div>
+    <div class="campo"><label>Gastos variables/unidad</label><input name="gastos_variables" type="number" step="any" min="0" value="0"></div>
+    <div class="campo"><label>Stock inicial</label><input name="stock_actual" type="number" step="1" min="0" value="0"></div>
+    <div class="campo"><label>Margen mínimo % (regla del dueño)</label><input name="margen_minimo_pct" type="number" step="any" placeholder="usa el global"></div>
+    <div class="campo"><label>Precio de la competencia</label><input name="precio_competencia" type="number" step="any" min="0" placeholder="opcional"></div>
+    <div class="campo"><button type="submit">Crear producto</button></div>
+  </form>
+</div>
+
+<div class="tarjeta">
+  {% if productos %}
+  <table>
+    <tr><th>Producto</th><th>Categoría</th><th class="num">Costo</th><th class="num">Precio</th><th class="num">Margen bruto</th><th class="num">Stock</th><th>Precio en USD / COP / CNY</th></tr>
+    {% for p in productos %}
+    <tr>
+      <td><a href="{{ url_for('producto_detalle', pid=p.id) }}">{{ p.nombre }}</a>{% if p.sku %} <span class="ayuda">{{ p.sku }}</span>{% endif %}</td>
+      <td>{{ p.categoria or '—' }}</td>
+      <td class="num">{{ p.costo|dinero(p.moneda) }}</td>
+      <td class="num">{{ p.precio_venta|dinero(p.moneda) }}</td>
+      <td class="num" {% if p.margen_pct is not none and p.margen_pct < 0 %}style="color:var(--err)"{% endif %}>{{ p.margen_pct|pct }}</td>
+      <td class="num">{{ p.stock_actual }}</td>
+      <td class="ayuda">{{ p.precios.USD|dinero('USD') }} · {{ p.precios.COP|dinero('COP') }} · {{ p.precios.CNY|dinero('CNY') }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p>No hay productos todavía.</p>{% endif %}
+</div>
+{% endblock %}
