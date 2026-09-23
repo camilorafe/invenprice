@@ -325,6 +325,33 @@ def guardar_recomendacion(conn, producto_id: int, rec: dict) -> int:
     return cur.lastrowid
 
 
+def _con_detalle(fila: Optional[dict]) -> Optional[dict]:
+    if fila is None:
+        return None
+    try:
+        fila["detalle"] = json.loads(fila.get("detalle_json") or "{}")
+    except (TypeError, ValueError):
+        fila["detalle"] = {}
+    return fila
+
+
+def ultima_recomendacion(conn, producto_id: int) -> Optional[dict]:
+    """Última recomendación guardada para un producto (con `detalle` ya parseado)."""
+    fila = conn.execute(
+        "SELECT * FROM recomendaciones WHERE producto_id = ? ORDER BY fecha DESC, id DESC LIMIT 1", (producto_id,)
+    ).fetchone()
+    return _con_detalle(fila)
+
+
+def ultimas_recomendaciones_por_producto(conn) -> dict[int, dict]:
+    """{producto_id: última recomendación} para todos los productos con alguna guardada."""
+    filas = conn.execute(
+        "SELECT r.* FROM recomendaciones r JOIN (SELECT producto_id, MAX(id) AS mid FROM recomendaciones GROUP BY producto_id) u "
+        "ON r.id = u.mid"
+    ).fetchall()
+    return {f["producto_id"]: _con_detalle(f) for f in filas}
+
+
 def listar_recomendaciones(conn, producto_id: Optional[int] = None, limite: int = 20) -> list[dict]:
     q, params = "SELECT * FROM recomendaciones", []
     if producto_id is not None:

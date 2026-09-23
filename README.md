@@ -114,6 +114,41 @@ y tarda ~1,5 minutos. Con GPU (≥ 6 GB VRAM) ambos bajan a segundos. En equipos
 desactivar el LLM: el motor de reglas responde en milisegundos y reproduce los 48 casos del dataset
 con un desvío medio del 0,25 % respecto a la recomendación experta.
 
+## Copiloto: modo por lotes (default) y "Regenerar ahora"
+
+Con ~4 minutos por recomendación (7B) o ~1,5 (3B) en un equipo sin GPU, el dashboard **no llama al
+modelo al cargar páginas**. La decisión es:
+
+- **Por lotes (default).** `python -m invenprice.batch_pricing` recorre el inventario activo, genera
+  una recomendación por producto (LLM si está disponible, motor de reglas si no) y la guarda en la
+  tabla `recomendaciones`. Se corre bajo demanda o programado, típicamente de noche. Cada producto
+  se procesa de forma independiente: un error en uno no detiene el lote.
+- **Consulta.** El inicio y la página de cada producto muestran la **última recomendación guardada
+  con su fecha** ("hace 3 h", "hace 2 días"), su fuente, si fue ajustada por el guardrail y si el
+  texto es del modelo o de plantilla. Si el precio del producto cambió después, se avisa.
+- **Regenerar ahora (síncrono).** Botón en la página del producto para forzar una recomendación
+  puntual esperando en pantalla; permite fijar velocidad y restricciones a mano. Si el modelo no está
+  disponible responde el motor de reglas al instante.
+
+```bash
+python -m invenprice.batch_pricing                 # todo el inventario, LLM según configuración
+python -m invenprice.batch_pricing --sin-llm       # solo motor de reglas (milisegundos)
+python -m invenprice.batch_pricing --solo 3 7      # productos concretos
+python -m invenprice.batch_pricing --modelo qwen2.5:3b-instruct-q4_K_M --timeout 300
+```
+
+Programarlo cada noche a las 02:00:
+
+```powershell
+# Windows (Programador de tareas)
+schtasks /Create /SC DAILY /ST 02:00 /TN "InvenPrice pricing" /TR "python -m invenprice.batch_pricing" /F
+```
+
+```cron
+# Linux/macOS (crontab -e); ajustar la ruta del proyecto
+0 2 * * * cd /ruta/invenprice && .venv/bin/python -m invenprice.batch_pricing >> data/batch.log 2>&1
+```
+
 ## Datos de demostración
 
 ```bash
@@ -154,6 +189,8 @@ invenprice/            paquete principal
   currency.py          Fase 3 · multi-moneda
   rules.py             Fase 5 · motor de reglas
   copilot.py           Fase 6 · LLM local + fallback + guardrail
+  auditoria.py         Fase 6 · verificación de cifras en justificación/riesgo
+  batch_pricing.py     Fase 6/8 · recomendaciones por lotes (python -m invenprice.batch_pricing)
   anomalies.py         Fase 7 · anomalías
   web/                 Fase 8 · interfaz Flask
 data/pricing_reasoning_dataset.jsonl   Fase 4 · 48 casos de razonamiento experto

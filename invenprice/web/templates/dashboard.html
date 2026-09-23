@@ -67,15 +67,28 @@
 </div>
 {% endif %}
 
-{% if recs %}
-<h2>Últimas recomendaciones del copiloto</h2>
+{% if productos %}
+<h2>Recomendaciones del copiloto (última guardada por producto)</h2>
 <div class="tarjeta">
+  <p class="ayuda">Las recomendaciones se generan por lotes con <code>python -m invenprice.batch_pricing</code> (por ejemplo cada noche) y aquí se muestra la última guardada con su fecha. Desde cada producto puedes regenerarla al momento.
+    {% if sin_rec %}<strong>{{ sin_rec }} producto(s) sin recomendación todavía.</strong>{% endif %}</p>
   <table>
-    <tr><th>Fecha</th><th>Producto</th><th class="num">Precio sugerido</th><th>Fuente</th><th>Guardrail</th></tr>
-    {% for r in recs %}
-    <tr><td>{{ r.fecha[:16] }}</td><td><a href="{{ url_for('producto_detalle', pid=r.producto_id) }}">#{{ r.producto_id }}</a></td>
-        <td class="num">{{ r.precio_sugerido|num }}</td><td><span class="fuente">{{ r.fuente }}</span></td>
-        <td>{% if r.ajustado_guardrail %}⚠ ajustada (original {{ r.precio_original|num }}){% else %}—{% endif %}</td></tr>
+    <tr><th>Producto</th><th class="num">Precio actual</th><th class="num">Precio sugerido</th><th class="num">Margen</th><th>Fuente</th><th>Guardrail</th><th>Generada</th></tr>
+    {% for fr in filas_rec %}
+    <tr>
+      <td><a href="{{ url_for('producto_detalle', pid=fr.p.id) }}">{{ fr.p.nombre }}</a></td>
+      <td class="num">{{ fr.p.precio_venta|dinero(fr.p.moneda) }}</td>
+      {% if fr.rec %}
+      <td class="num"><strong>{{ fr.rec.precio_sugerido|dinero(fr.p.moneda) }}</strong></td>
+      <td class="num">{{ fr.rec.margen_resultante_pct|pct }}</td>
+      <td><span class="fuente">{{ fr.rec.fuente }}</span>{% if fr.rec.detalle.justificacion_fuente == 'plantilla' %} <span class="ayuda">texto plantilla</span>{% endif %}</td>
+      <td>{% if fr.rec.ajustado_guardrail %}⚠ ajustada (original {{ fr.rec.precio_original|dinero(fr.p.moneda) }}){% else %}—{% endif %}</td>
+      <td>{{ fr.rec.fecha[:16] }} <span class="ayuda">({{ fr.edad }})</span></td>
+      {% else %}
+      <td class="num" colspan="4"><span class="ayuda">sin recomendación guardada</span></td>
+      <td><a href="{{ url_for('producto_detalle', pid=fr.p.id) }}">generar</a></td>
+      {% endif %}
+    </tr>
     {% endfor %}
   </table>
 </div>

@@ -27,6 +27,10 @@ def main() -> None:
     if DB.exists():
         DB.unlink()
     subprocess.run([sys.executable, str(RAIZ / "scripts" / "demo_seed.py"), str(DB)], check=True, cwd=RAIZ)
+    # modo por lotes (default): genera la recomendación de todo el inventario sin LLM antes de abrir el dashboard
+    t0 = time.perf_counter()
+    subprocess.run([sys.executable, "-m", "invenprice.batch_pricing", "--db", str(DB), "--sin-llm"], check=True, cwd=RAIZ)
+    print(f"batch_pricing (reglas)           -> ok en {time.perf_counter() - t0:.1f}s")
     srv = subprocess.Popen(
         [sys.executable, "-c", f"from invenprice.web.app import crear_app; crear_app(r'{DB}').run(port={PUERTO})"],
         cwd=RAIZ, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

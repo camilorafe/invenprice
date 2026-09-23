@@ -112,3 +112,34 @@ def test_api_json_producto(cliente):
     data = r.get_json()
     assert data["margen_bruto_pct"] == pytest.approx(33.3333, abs=1e-3)
     assert set(data["precios"]) == {"USD", "COP", "CNY"}
+
+
+# ------------------------------------------------------------------ modo por lotes + última recomendación guardada
+def test_producto_sin_recomendacion_guardada_indica_como_generarla(cliente):
+    _crear_producto(cliente)
+    html = cliente.get("/productos/1").get_data(as_text=True)
+    assert "batch_pricing" in html and "Regenerar ahora" in html
+
+
+def test_dashboard_y_producto_muestran_ultima_recomendacion_guardada(cliente):
+    from invenprice import batch_pricing
+    _crear_producto(cliente, costo="16000", precio_venta="20000", margen_minimo_pct="30")
+    _crear_producto(cliente, nombre="Otro", sku="OTR-1")
+    # la app de pruebas comparte una única conexión en memoria; el lote se ejecuta sobre ella
+    conn = cliente.application.config["CONN_TEST"]
+    conn.execute("UPDATE configuracion SET valor='0' WHERE clave='copiloto_llm_activo'")
+    resumen = batch_pricing.ejecutar(conn, usar_llm=False)
+    assert len(resumen) == 2
+    html = cliente.get("/productos/1").get_data(as_text=True)
+    assert "Última recomendación guardada" in html and "22.900" in html and "hace 0 min" in html
+    home = cliente.get("/").get_data(as_text=True)
+    assert "última guardada por producto" in home and "22.900" in home and "hace 0 min" in home
+    assert "sin recomendación guardada" not in home
+
+
+def test_regenerar_ahora_actualiza_la_ultima(cliente):
+    _crear_producto(cliente, costo="16000", precio_venta="20000", margen_minimo_pct="30")
+    cliente.post("/configuracion", data={"copiloto_llm_activo": "0", "margen_minimo_global_pct": "20"}, follow_redirects=True)
+    cliente.post("/productos/1/recomendar", data={"velocidad_venta": "media", "restricciones": ""}, follow_redirects=True)
+    html = cliente.get("/productos/1").get_data(as_text=True)
+    assert "Última recomendación guardada" in html and "22.900" in html

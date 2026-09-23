@@ -17,15 +17,21 @@ MONEDAS = ("USD", "COP", "CNY")
 VELOCIDADES = ("lenta", "media", "rapida", "muy_rapida")
 
 
-def clasificar_velocidad(unidades_mes: float) -> str:
-    u = rules.UNIDADES_POR_VELOCIDAD
-    if unidades_mes <= u["lenta"]:
-        return "lenta"
-    if unidades_mes <= u["media"]:
-        return "media"
-    if unidades_mes <= u["rapida"]:
-        return "rapida"
-    return "muy_rapida"
+clasificar_velocidad = rules.clasificar_velocidad  # compatibilidad
+
+
+def _edad(fecha_iso: str) -> str:
+    """'hace 3 h', 'hace 2 días' para mostrar qué tan vieja es una recomendación guardada."""
+    try:
+        dt = datetime.fromisoformat(fecha_iso.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return ""
+    seg = (datetime.now(timezone.utc) - dt).total_seconds()
+    if seg < 3600:
+        return f"hace {int(seg // 60)} min"
+    if seg < 86400:
+        return f"hace {int(seg // 3600)} h"
+    return f"hace {int(seg // 86400)} días"
 
 
 def crear_app(ruta_db: str | Path = db.DB_PATH_DEFAULT, testing: bool = False) -> Flask:
@@ -34,6 +40,7 @@ def crear_app(ruta_db: str | Path = db.DB_PATH_DEFAULT, testing: bool = False) -
 
     # una sola conexión compartida cuando la BD es en memoria (tests); por petición si es archivo
     conn_memoria = db.abrir(":memory:") if str(ruta_db) == ":memory:" else None
+    app.config["CONN_TEST"] = conn_memoria  # solo para tests: acceso directo a la BD en memoria
 
     def conexion() -> sqlite3.Connection:
         if conn_memoria is not None:
@@ -68,27 +75,8 @@ def crear_app(ruta_db: str | Path = db.DB_PATH_DEFAULT, testing: bool = False) -
         return db.obtener_config(conexion(), clave, default)
 
     def contexto_producto(p: dict, velocidad: Optional[str] = None, restricciones: Optional[list[str]] = None) -> dict:
-        conn = conexion()
-        desde = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        ventas = db.listar_ventas(conn, producto_id=p["id"], desde=desde)
-        unidades_30d = sum(v["cantidad"] for v in ventas)
-        hoy = datetime.now(timezone.utc)
-        objetivo = db.obtener_objetivo(conn, hoy.year, hoy.month)
-        objetivo_prod = None
-        if objetivo:
-            n = max(1, len(db.listar_productos(conn)))
-            objetivo_prod = currency.convertir_con_bd(conn, objetivo["monto"], objetivo["moneda"], p["moneda"]) / n
-        restr = list(restricciones or [])
-        if p.get("margen_minimo_pct") is not None:
-            restr.append(f"nunca bajar de {p['margen_minimo_pct']:g}% de margen")
-        return {
-            "velocidad_venta": velocidad or clasificar_velocidad(unidades_30d),
-            "unidades_30d": unidades_30d,
-            "objetivo_ingreso_mensual": objetivo_prod,
-            "objetivo_total": objetivo,
-            "restricciones": restr,
-            "margen_minimo_global_pct": float(cfg("margen_minimo_global_pct", "20")),
-        }
+        # misma lógica que usa el proceso por lotes (invenprice.batch_pricing)
+        return copilot.contexto_desde_bd(conexion(), p, velocidad=velocidad, restricciones=restricciones)
 
     def analisis(p: dict, ctx: Optional[dict] = None) -> dict:
         conn = conexion()
@@ -135,10 +123,15 @@ def crear_app(ruta_db: str | Path = db.DB_PATH_DEFAULT, testing: bool = False) -
         contribucion_mes = sum(r.contribucion_total for r in ranking)
         valor_stock = sum(fi["costo"] * fi["stock"] for fi in filas)
         alertas = anomalies.detectar_en_bd(conn)
-        recs = db.listar_recomendaciones(conn, limite=5)
+        ultimas = db.ultimas_recomendaciones_por_producto(conn)
+        filas_rec = []
+        for p in productos:
+            u = ultimas.get(p["id"])
+            filas_rec.append({"p": p, "rec": u, "edad": _edad(u["fecha"]) if u else None})
         return render_template("dashboard.html", productos=productos, ranking=ranking, pe=pe, objetivo=objetivo,
                                contribucion_mes=contribucion_mes, valor_stock=valor_stock, alertas=alertas[:5],
-                               n_alertas=len(alertas), moneda_base=moneda_base, recs=recs, Estado=f.Estado)
+                               n_alertas=len(alertas), moneda_base=moneda_base, filas_rec=filas_rec,
+                               sin_rec=sum(1 for fr in filas_rec if fr["rec"] is None), Estado=f.Estado)
 
     @app.route("/productos")
     def productos():
@@ -174,8 +167,10 @@ def crear_app(ruta_db: str | Path = db.DB_PATH_DEFAULT, testing: bool = False) -
         a = analisis(p, ctx)
         movs = db.listar_movimientos(conn, producto_id=pid)[-25:][::-1]
         recs = db.listar_recomendaciones(conn, producto_id=pid, limite=5)
+        ultima = db.ultima_recomendacion(conn, pid)
         return render_template("producto.html", p=p, a=a, ctx=ctx, movs=movs, recs=recs, monedas=MONEDAS,
-                               velocidades=VELOCIDADES, Estado=f.Estado)
+                               velocidades=VELOCIDADES, Estado=f.Estado, ultima=ultima,
+                               edad_ultima=_edad(ultima["fecha"]) if ultima else None)
 
     @app.route("/productos/<int:pid>/editar", methods=["POST"])
     def producto_editar(pid):

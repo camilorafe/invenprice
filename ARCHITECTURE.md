@@ -46,7 +46,9 @@ Sistema de inventario y pricing para pequeñas empresas. **Offline-first, costo 
 | `invenprice/currency.py` | 3 | Conversión USD/COP/CNY, Modo A manual, Modo B opcional |
 | `data/pricing_reasoning_dataset.jsonl` | 4 | 40–50 casos de razonamiento experto |
 | `invenprice/rules.py` | 5 | Motor de reglas inspeccionable (fallback permanente) |
-| `invenprice/copilot.py` | 6 | Orquestador: LLM local → validación → reglas → guardrail |
+| `invenprice/copilot.py` | 6 | Orquestador: LLM local → validación de schema → reglas → guardrail → auditoría de cifras |
+| `invenprice/auditoria.py` | 6 | Extrae las cifras del texto (justificación/riesgo) y las compara con el motor financiero; si no coinciden, el texto se sustituye por plantilla |
+| `invenprice/batch_pricing.py` | 6/8 | Proceso por lotes (`python -m invenprice.batch_pricing`): una recomendación guardada por producto; el dashboard muestra la última con su fecha y ofrece "Regenerar ahora" síncrono |
 | `invenprice/anomalies.py` | 7 | Detección estadística de anomalías de inventario |
 | `invenprice/web/` | 8 | Dashboard Flask + HTML simple |
 

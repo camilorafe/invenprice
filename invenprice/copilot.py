@@ -367,3 +367,31 @@ def recomendar_para_producto(conn, producto: dict, contexto: Optional[dict] = No
             "riesgo": rec.riesgo, "detalle": rec.detalle,
         })
     return rec
+
+
+def contexto_desde_bd(conn, producto: dict, velocidad: Optional[str] = None, restricciones: Optional[list[str]] = None) -> dict:
+    """Contexto de pricing de un producto a partir de la BD: velocidad (ventas de 30 días), parte
+    proporcional del objetivo del mes en la moneda del producto, restricciones y margen mínimo.
+    Lo usan el dashboard (Fase 8) y el proceso por lotes (batch_pricing)."""
+    from datetime import datetime, timedelta, timezone
+    from . import db
+    ahora = datetime.now(timezone.utc)
+    desde = (ahora - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    unidades_30d = sum(v["cantidad"] for v in db.listar_ventas(conn, producto_id=producto["id"], desde=desde))
+    objetivo = db.obtener_objetivo(conn, ahora.year, ahora.month)
+    objetivo_prod = None
+    if objetivo:
+        n = max(1, len(db.listar_productos(conn)))
+        objetivo_prod = currency.convertir_con_bd(conn, objetivo["monto"], objetivo["moneda"], producto["moneda"]) / n
+    restr = list(restricciones or [])
+    if producto.get("margen_minimo_pct") is not None:
+        restr.append(f"nunca bajar de {producto['margen_minimo_pct']:g}% de margen")
+    vel = velocidad if velocidad in rules.AJUSTE_BASE_VELOCIDAD else rules.clasificar_velocidad(unidades_30d)
+    return {
+        "velocidad_venta": vel,
+        "unidades_30d": unidades_30d,
+        "objetivo_ingreso_mensual": objetivo_prod,
+        "objetivo_total": objetivo,
+        "restricciones": restr,
+        "margen_minimo_global_pct": float(db.obtener_config(conn, "margen_minimo_global_pct", "20")),
+    }

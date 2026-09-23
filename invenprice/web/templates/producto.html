@@ -38,13 +38,34 @@
 
 <h2>Copiloto de precio</h2>
 <div class="tarjeta">
+  {% if ultima %}
+  <div class="fila">
+    <div>
+      <div class="ayuda">Última recomendación guardada · {{ ultima.fecha[:16] }} UTC ({{ edad_ultima }})</div>
+      <div class="grande">{{ ultima.precio_sugerido|dinero(p.moneda) }}</div>
+      <p>Margen resultante {{ ultima.margen_resultante_pct|pct }} · <span class="fuente">{% if ultima.fuente == 'llm_local' %}Modelo local{% else %}Motor de reglas{% endif %}</span>
+        {% if ultima.detalle.justificacion_fuente == 'plantilla' %}<span class="ayuda">· texto por plantilla (cifras del modelo descartadas)</span>{% endif %}</p>
+      {% if ultima.ajustado_guardrail %}<div class="aviso warn">⚠ Recomendación original ({{ ultima.precio_original|dinero(p.moneda) }}) ajustada al mínimo viable ({{ ultima.precio_minimo_viable|dinero(p.moneda) }}) por restricción de margen.</div>{% endif %}
+      {% if ultima.precio_sugerido != p.precio_venta and ultima.detalle.precio_actual != p.precio_venta %}<p class="aviso warn">El precio del producto cambió desde esta recomendación ({{ ultima.detalle.precio_actual|dinero(p.moneda) }} → {{ p.precio_venta|dinero(p.moneda) }}); conviene regenerarla.</p>{% endif %}
+    </div>
+    <div>
+      <p><strong>Justificación.</strong> {{ ultima.justificacion }}</p>
+      <p><strong>Riesgo.</strong> {{ ultima.riesgo }}</p>
+    </div>
+  </div>
+  <hr style="border:0;border-top:1px solid var(--borde);margin:14px 0">
+  {% else %}
+  <p class="aviso warn">Aún no hay una recomendación guardada para este producto. El proceso por lotes las genera para todo el inventario:
+     <code>python -m invenprice.batch_pricing</code> (programable de noche). O regenera solo este producto ahora.</p>
+  {% endif %}
+  <h3>Regenerar ahora (síncrono)</h3>
   <form class="linea" method="post" action="{{ url_for('producto_recomendar', pid=p.id) }}">
     <div class="campo"><label>Velocidad de venta</label>
       <select name="velocidad_venta">{% for v in velocidades %}<option value="{{ v }}" {% if v == ctx.velocidad_venta %}selected{% endif %}>{{ v }}{% if v == ctx.velocidad_venta %} (detectada){% endif %}</option>{% endfor %}</select></div>
     <div class="campo" style="flex:2 1 320px"><label>Restricciones del dueño (separadas por ;)</label><input name="restricciones" placeholder="ej. temporada alta; no subir este trimestre; liquidar"></div>
-    <div class="campo"><button type="submit">Pedir recomendación</button></div>
+    <div class="campo"><button type="submit">Regenerar ahora</button></div>
   </form>
-  <p class="ayuda">Si el modelo local está instalado puede tardar varios minutos en un equipo sin GPU; si no está disponible se usa el motor de reglas al instante.</p>
+  <p class="ayuda">Espera en esta página: con el modelo local activo puede tardar 1,5-4 minutos en un equipo sin GPU. Si el modelo no está disponible responde el motor de reglas al instante. Para todo el inventario usa el proceso por lotes.</p>
   {% if recs %}
   <h3>Historial</h3>
   <table><tr><th>Fecha</th><th class="num">Precio sugerido</th><th>Fuente</th><th>Guardrail</th></tr>

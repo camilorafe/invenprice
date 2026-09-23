@@ -70,7 +70,16 @@ son valores de una enumeración que la interfaz traduce a texto claro. 35 tests 
 comparan contra valores calculados a mano (costo 10.000 / precio 15.000 → margen 33,3 %, markup 50 %,
 mínimo viable al 40 % = 16.667; margen unitario 5.000 y objetivo 2.000.000 → 400 unidades).
 
-### 4. Offline-first en todo
+### 4. Lotes por defecto, síncrono bajo demanda
+
+El benchmark (≈4 min por recomendación con el 7B en CPU) hizo inviable llamar al modelo al cargar
+una página. La decisión fue separar **generar** de **consultar**: un proceso por lotes
+(`python -m invenprice.batch_pricing`, programable de noche) guarda una recomendación por producto;
+el dashboard muestra la última con su fecha y avisa si el precio cambió después; y un botón
+"Regenerar ahora" mantiene la ruta síncrona para un solo producto cuando alguien acepta esperar. El
+motor de reglas hace que el lote completo tarde milisegundos si el modelo no está.
+
+### 5. Offline-first en todo
 
 SQLite embebido, Flask con HTML renderizado en servidor, tasas de cambio manuales por defecto y
 un Modo B opcional que, ante cualquier fallo de red, devuelve la última tasa guardada. La detección
